@@ -1,186 +1,172 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import "./App.css";
+
+const BASE_URL = "http://localhost:8080/api/ai";
 
 function App() {
-
     const [jobDescription, setJobDescription] = useState("");
     const [resumeText, setResumeText] = useState("");
-
     const [result, setResult] = useState(null);
     const [savedJobs, setSavedJobs] = useState([]);
-
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        fetchSavedJobs();
+    }, []);
+
+    const fetchSavedJobs = async () => {
+        try {
+            const response = await axios.get(`${BASE_URL}/jobs`);
+            setSavedJobs(response.data);
+        } catch (err) {
+            console.error("Failed to fetch saved jobs:", err);
+        }
+    };
 
     const analyzeMatch = async () => {
+        if (!jobDescription.trim() || !resumeText.trim()) {
+            setError("Please enter both a job description and resume.");
+            return;
+        }
+
         try {
             setLoading(true);
-            const jobResponse = await axios.post("http://localhost:8080/api/ai/analyze-job",
-                {
-                    jobDescription: jobDescription
-                }
-            );
-            const resumeResponse = await axios.post("http://localhost:8080/api/ai/analyze-resume",
-                {
-                    resumeText: resumeText
-                }
-            );
-            const gapResponse = await axios.post("http://localhost:8080/api/ai/analyze-gap",
-                {
-                    job: jobResponse.data,
-                    resume: resumeResponse.data
-                }
-            );
+            setError(null);
+            setResult(null);
+
+            const [jobResponse, resumeResponse] = await Promise.all([
+                axios.post(`${BASE_URL}/analyze-job`, { jobDescription }),
+                axios.post(`${BASE_URL}/analyze-resume`, { resumeText })
+            ]);
+
+            const gapResponse = await axios.post(`${BASE_URL}/analyze-gap`, {
+                job: jobResponse.data,
+                resume: resumeResponse.data
+            });
+
             setResult(gapResponse.data);
+            fetchSavedJobs();
 
-        } catch (error) {
-
-            console.error("FULL ERROR:", error);
-            if (error.response) {
-                console.log("Backend Response:",
-                    error.response.data);
-                alert(JSON.stringify(error.response.data));
-            } else {
-                alert(error.message);
-            }
+        } catch (err) {
+            setError("Analysis failed. Please try again.");
+            console.error(err);
         } finally {
             setLoading(false);
         }
     };
-useEffect(() => {
-    fetchSavedJobs();
-
-}, []);
-
-const fetchSavedJobs = async () => {
-
-    try {
-
-        const response = await axios.get(
-            "http://localhost:8080/api/ai/jobs"
-        );
-
-        setSavedJobs(response.data);
-
-    } catch (error) {
-
-        console.error(error);
-    }
-};
 
     return (
-        <div style={{
-            maxWidth: "900px",
-            margin: "0 auto",
-            padding: "40px",
-            fontFamily: "Arial"
-        }}>
+        <div className="app">
+            <header className="header">
+                <h1 className="header-title">🤖 AI Job Copilot</h1>
+                <p className="header-subtitle">
+                    Paste a job description and your resume to see how well you match
+                </p>
+            </header>
 
-            <h1>AI Job Copilot</h1>
-            <h2>Saved Job Analyses</h2>
+            <main className="main">
+                {savedJobs.length > 0 && (
+                    <section className="saved-jobs">
+                        <h2 className="section-title">Previous Analyses</h2>
+                        <div className="saved-jobs-grid">
+                            {savedJobs.map((job) => (
+                                <div key={job.id} className="saved-job-card">
+                                    <h3 className="saved-job-role">{job.role}</h3>
+                                    <p className="saved-job-exp">
+                                        Experience: {job.experience}
+                                    </p>
+                                    <p className="saved-job-skills">
+                                        {job.requiredSkills?.slice(0, 4).join(" • ")}
+                                        {job.requiredSkills?.length > 4 && " ..."}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
-            {savedJobs.map((job) => (
+                <section className="input-section">
+                    <div className="input-grid">
+                        <div className="input-group">
+                            <label className="input-label">Job Description</label>
+                            <textarea
+                                className="textarea"
+                                placeholder="Paste the job description here..."
+                                value={jobDescription}
+                                onChange={(e) => setJobDescription(e.target.value)}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label className="input-label">Your Resume</label>
+                            <textarea
+                                className="textarea"
+                                placeholder="Paste your resume text here..."
+                                value={resumeText}
+                                onChange={(e) => setResumeText(e.target.value)}
+                            />
+                        </div>
+                    </div>
 
-                <div
-                    key={job.id}
-                    style={{
-                        border: "1px solid gray",
-                        padding: "10px",
-                        marginBottom: "10px"
-                    }}
-                >
+                    {error && <p className="error-message">{error}</p>}
 
-                    <h3>{job.role}</h3>
+                    <button
+                        className={`analyze-btn ${loading ? "loading" : ""}`}
+                        onClick={analyzeMatch}
+                        disabled={loading}
+                    >
+                        {loading ? "⏳ Analyzing..." : "⚡ Analyze Match"}
+                    </button>
+                </section>
 
-                    <p>
-                        Experience: {job.experience}
-                    </p>
+                {result && (
+                    <section className="result-section">
+                        <div className={`score-card ${
+                            result.matchScore >= 70 ? "score-high" :
+                            result.matchScore >= 40 ? "score-mid" : "score-low"
+                        }`}>
+                            <div className="score-number">{result.matchScore}%</div>
+                            <div className="score-label">Match Score</div>
+                        </div>
 
-                    <p>
-                        Required Skills:
-                        {job.requiredSkills?.join(", ")}
-                    </p>
+                        <div className="skills-grid">
+                            <div className="skills-card skills-matching">
+                                <h3 className="skills-title">✅ Matching Skills</h3>
+                                <div className="skills-tags">
+                                    {result.matchingSkills.map((skill, i) => (
+                                        <span key={i} className="tag tag-green">
+                                            {skill}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
 
-                </div>
-            ))}
+                            <div className="skills-card skills-missing">
+                                <h3 className="skills-title">❌ Missing Skills</h3>
+                                <div className="skills-tags">
+                                    {result.missingSkills.map((skill, i) => (
+                                        <span key={i} className="tag tag-red">
+                                            {skill}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
 
-            <h3>Job Description</h3>
-
-            <textarea
-                rows="10"
-                style={{
-                    width: "100%",
-                    marginBottom: "20px"
-                }}
-                value={jobDescription}
-                onChange={(e) =>
-                    setJobDescription(e.target.value)
-                }
-            />
-
-            <h3>Resume</h3>
-
-            <textarea
-                rows="10"
-                style={{
-                    width: "100%",
-                    marginBottom: "20px"
-                }}
-                value={resumeText}
-                onChange={(e) =>
-                    setResumeText(e.target.value)
-                }
-            />
-
-            <button
-                onClick={analyzeMatch}
-                disabled={loading}
-                style={{
-                    padding: "10px 20px",
-                    cursor: "pointer"
-                }}
-            >
-                {loading ? "Analyzing..." : "Analyze Match"}
-            </button>
-
-            {result && (
-
-                <div style={{
-                    marginTop: "40px",
-                    border: "1px solid #ccc",
-                    padding: "20px"
-                }}>
-
-                    <h2>
-                        Match Score: {result.matchScore}%
-                    </h2>
-
-                    <h3>Matching Skills</h3>
-
-                    <ul>
-                        {result.matchingSkills.map((skill, index) => (
-                            <li key={index}>{skill}</li>
-                        ))}
-                    </ul>
-
-                    <h3>Missing Skills</h3>
-
-                    <ul>
-                        {result.missingSkills.map((skill, index) => (
-                            <li key={index}>{skill}</li>
-                        ))}
-                    </ul>
-
-                    <h3>Suggestions</h3>
-
-                    <ul>
-                        {result.suggestions.map((item, index) => (
-                            <li key={index}>{item}</li>
-                        ))}
-                    </ul>
-
-                </div>
-            )}
-
+                        <div className="suggestions-card">
+                            <h3 className="skills-title">💡 Suggestions</h3>
+                            <ul className="suggestions-list">
+                                {result.suggestions.map((item, i) => (
+                                    <li key={i} className="suggestion-item">
+                                        {item}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </section>
+                )}
+            </main>
         </div>
     );
 }
