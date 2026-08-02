@@ -36,7 +36,7 @@ public class GroqService {
         // Step 3: Build the request body
         Map<String, Object> body = new HashMap<>();
         body.put("model", model);
-        body.put("temperature", 0.1);
+        body.put("temperature", 0.0);
         body.put("response_format", Map.of("type", "json_object"));
 
         Map<String, String> message = new HashMap<>();

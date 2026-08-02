@@ -38,7 +38,10 @@ public class AiController {
 
         return gapAnalysisService.analyzeGap(
                 request.getJob(),
-                request.getResume());
+                request.getResume(),
+                request.getRawJobDescription(),
+                request.getRawResumeText()
+        );
     }
     @GetMapping("/jobs")
     public List<JobAnalysisEntity> getAllJobs() {
@@ -46,7 +49,10 @@ public class AiController {
         return AIService.getAllJobs();
     }
     @PostMapping("/optimize-resume")
-    public ResumeOptimizationResponse optimizeResume(@RequestBody ResumeOptimizationRequest request) {
-        return AIService.optimizeResume(request.getJobDescription(),  request.getResumeText());
+    public ResumeOptimizationResponse optimizeResume(
+            @RequestBody ResumeOptimizationRequest request) {
+        return AIService.optimizeResume(
+                request.getJobDescription(),
+                request.getResumeText());
     }
 }
