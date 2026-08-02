@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { jsPDF } from "jspdf";
+import { Document, Packer, Paragraph, TextRun } from "docx";
 import "./App.css";
 
 const BASE_URL = "http://localhost:8080/api/ai";
@@ -15,6 +17,9 @@ function App() {
     // Optimize resume state
     const [optimizing, setOptimizing] = useState(false);
     const [optimizedResult, setOptimizedResult] = useState(null);
+
+    // Resume export state ("pdf" | "docx" | null)
+    const [downloading, setDownloading] = useState(null);
 
     useEffect(() => {
         fetchSavedJobs();
@@ -82,6 +87,77 @@ function App() {
             console.error(err);
         } finally {
             setOptimizing(false);
+        }
+    };
+
+    const downloadAsPDF = () => {
+        if (!optimizedResult?.optimizedResume) return;
+
+        try {
+            setDownloading("pdf");
+
+            const doc = new jsPDF({ unit: "pt", format: "letter" });
+            const margin = 48;
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const maxWidth = pageWidth - margin * 2;
+            const lineHeight = 14;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(11);
+
+            let y = margin;
+            optimizedResult.optimizedResume.split("\n").forEach((paragraph) => {
+                const lines = doc.splitTextToSize(paragraph || " ", maxWidth);
+                lines.forEach((line) => {
+                    if (y > pageHeight - margin) {
+                        doc.addPage();
+                        y = margin;
+                    }
+                    doc.text(line, margin, y);
+                    y += lineHeight;
+                });
+            });
+
+            doc.save("optimized-resume.pdf");
+        } catch (err) {
+            setError("Failed to generate PDF. Please try again.");
+            console.error(err);
+        } finally {
+            setDownloading(null);
+        }
+    };
+
+    const downloadAsDocx = async () => {
+        if (!optimizedResult?.optimizedResume) return;
+
+        try {
+            setDownloading("docx");
+
+            const paragraphs = optimizedResult.optimizedResume
+                .split("\n")
+                .map((line) => new Paragraph({
+                    children: [new TextRun(line)],
+                }));
+
+            const doc = new Document({
+                sections: [{ children: paragraphs }],
+            });
+
+            const blob = await Packer.toBlob(doc);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "optimized-resume.docx";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setError("Failed to generate DOCX. Please try again.");
+            console.error(err);
+        } finally {
+            setDownloading(null);
         }
     };
 
@@ -380,11 +456,23 @@ function App() {
 
                                     {/* Download buttons */}
                                     <div className="download-section">
-                                        <button className="download-btn pdf-btn">
-                                            📥 Download PDF
+                                        <button
+                                            className="download-btn pdf-btn"
+                                            onClick={downloadAsPDF}
+                                            disabled={downloading === "pdf"}
+                                        >
+                                            {downloading === "pdf"
+                                                ? "⏳ Generating PDF..."
+                                                : "📥 Download PDF"}
                                         </button>
-                                        <button className="download-btn docx-btn">
-                                            📥 Download DOCX
+                                        <button
+                                            className="download-btn docx-btn"
+                                            onClick={downloadAsDocx}
+                                            disabled={downloading === "docx"}
+                                        >
+                                            {downloading === "docx"
+                                                ? "⏳ Generating DOCX..."
+                                                : "📥 Download DOCX"}
                                         </button>
                                     </div>
                                 </div>
